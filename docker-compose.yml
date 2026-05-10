@@ -1,0 +1,81 @@
+services:
+  db:
+    image: timescale/timescaledb:latest-pg16
+    environment:
+      POSTGRES_DB: groceryai
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  scraper-worker:
+    build: ./scraper
+    command: celery -A tasks worker --loglevel=info
+    environment:
+      DATABASE_URL: postgresql://postgres:${DB_PASSWORD}@db:5432/groceryai
+      REDIS_URL: redis://redis:6379/0
+      KROGER_CLIENT_ID: ${KROGER_CLIENT_ID}
+      KROGER_CLIENT_SECRET: ${KROGER_CLIENT_SECRET}
+      KROGER_ZIP_CODE: ${KROGER_ZIP_CODE}
+    depends_on:
+      - db
+      - redis
+
+  celery-beat:
+    build: ./scraper
+    command: celery -A tasks beat --loglevel=info
+    environment:
+      DATABASE_URL: postgresql://postgres:${DB_PASSWORD}@db:5432/groceryai
+      REDIS_URL: redis://redis:6379/0
+      KROGER_CLIENT_ID: ${KROGER_CLIENT_ID}
+      KROGER_CLIENT_SECRET: ${KROGER_CLIENT_SECRET}
+      KROGER_ZIP_CODE: ${KROGER_ZIP_CODE}
+    depends_on:
+      - db
+      - redis
+
+  flower:
+    build: ./scraper
+    command: celery -A tasks flower --port=5555 --broker=redis://redis:6379/0
+    ports:
+      - "5555:5555"
+    environment:
+      DATABASE_URL: postgresql://postgres:${DB_PASSWORD}@db:5432/groceryai
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      - redis
+      - db
+
+  backend:
+    build: ./backend
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://postgres:${DB_PASSWORD}@db:5432/groceryai
+      SPOONACULAR_API_KEY: ${SPOONACULAR_API_KEY}
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY}
+      ALERT_FROM_EMAIL: alerts@groceryai.app
+      APP_URL: http://localhost:3000
+    depends_on:
+      - db
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    environment:
+      VITE_API_URL: http://localhost:8000
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:

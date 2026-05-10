@@ -1,0 +1,11 @@
+fastapi==0.111.0
+uvicorn==0.29.0
+sqlalchemy==2.0.30
+psycopg2-binary==2.9.9
+pydantic==2.7.1
+PuLP==2.8.0
+rapidfuzz==3.9.0
+requests==2.31.0
+python-dotenv==1.0.1
+sendgrid==6.11.0
+websockets==12.0
